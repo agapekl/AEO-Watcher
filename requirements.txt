@@ -1,0 +1,5 @@
+flask==3.0.0
+openai==1.12.0
+python-dotenv==1.0.0
+sqlite3  # comes with Python
+datetime  # comes with Python
