@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Brand Analysis Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0A0A0A;
+            --bg-secondary: #1A1A1A;
+            --accent-color: #4ade80;
+            --text-primary: #F3F4F6;
+            --card-bg: rgba(26, 26, 26, 0.8);
+        }
+        
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid rgba(74, 222, 128, 0.2);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin: 1rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .terminal-input {
+            background-color: rgba(10, 10, 10, 0.9);
+            border: 1px solid var(--accent-color);
+            color: var(--text-primary);
+            font-family: 'Inter', monospace;
+        }
+
+        .time-filter {
+            background-color: var(--bg-secondary);
+            border: 1px solid rgba(74, 222, 128, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            color: #9CA3AF;
+        }
+
+        .stats-badge {
+            background-color: var(--bg-secondary);
+            border: 1px solid rgba(74, 222, 128, 0.2);
+            padding: 1rem;
+            border-radius: 0.5rem;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div class="container mx-auto p-4">
+
+        <!-- Query Section -->
+        <div class="card">
+            <textarea id="queryInput" 
+                class="terminal-input w-full p-4 rounded-lg mb-4" 
+                rows="4" 
+                placeholder="Enter your query here..."></textarea>
+            
+            <div class="flex flex-wrap gap-3">
+                <select id="modelSelect" class="terminal-input p-2 rounded-lg">
+                    <option value="gpt-4o">GPT-4o</option>
+                    <option value="gpt-4o-mini">GPT-4o mini</option>
+                    <option value="o1-mini">o1-mini</option>>
+                </select>
+                
+                <select id="categorySelect" class="terminal-input p-2 rounded-lg">
+                    <option value="general">General</option>
+                    <option value="tech">Technology</option>
+                    <option value="food">Food & Drink</option>
+                    <option value="fashion">Fashion</option>
+                    <option value="software">Software</option>
+                    <option value="electronics">Electronics</option>
+                    <option value="automotive">Automotive</option>
+                </select>
+                
+                <select id="batchSelect" class="terminal-input p-2 rounded-lg">
+                    <option value="1">1 Query</option>
+                    <option value="3">3 Queries</option>
+                    <option value="5">5 Queries</option>
+                    <option value="10">10 Queries</option>
+                </select>
+                
+                <button onclick="analyzeQuery()" 
+                    class="bg-green-600 hover:bg-green-700 px-6 py-2 rounded-lg">
+                    Analyze
+                </button>
+
+                <button onclick="resetDatabase()" 
+                    class="bg-red-600 hover:bg-red-700 px-6 py-2 rounded-lg">
+                    Reset DB
+                </button>
+            </div>
+        </div>
+
+        <!-- Analytics Overview -->
+        <div class="grid grid-cols-4 gap-4 my-6">
+            <div class="stats-badge">
+                <div class="text-sm text-green-300">Total Queries</div>
+                <div id="totalQueries" class="text-2xl">0</div>
+            </div>
+            <div class="stats-badge">
+                <div class="text-sm text-green-300">Unique Brands</div>
+                <div id="uniqueBrands" class="text-2xl">0</div>
+            </div>
+            <div class="stats-badge">
+                <div class="text-sm text-green-300">Avg Confidence</div>
+                <div id="avgConfidence" class="text-2xl">0%</div>
+            </div>
+            <div class="stats-badge">
+                <div class="text-sm text-green-300">Top Category</div>
+                <div id="topCategory" class="text-2xl">-</div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="grid grid-cols-2 gap-6">
+            <div class="card">
+                <h3 class="text-xl mb-4 text-green-300">Latest Results</h3>
+                <div id="results" class="terminal-input p-4 rounded-lg min-h-[200px] overflow-auto"></div>
+            </div>
+            
+            <div class="card">
+                <h3 class="text-xl mb-4 text-green-300">Top Mentioned Brands</h3>
+                <div class="chart-container">
+                    <canvas id="brandsChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add after the existing charts section -->
+        <div class="card mt-4">
+            <h3 class="text-xl mb-4 text-green-300">Brand Ranking Overview</h3>
+            <div class="space-y-4" id="rankingOverview">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <div id="loading" class="hidden fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="text-center">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div>
+            <div class="mt-4 text-green-400" id="loadingText">Processing queries...</div>
+        </div>
+    </div>
+
+    <script>
+        let brandsChart, categoryChart, confidenceChart, rankingChart;
+
+        function showNoResults() {
+            return `
+                <div class="flex flex-col items-center justify-center h-[200px] text-gray-400">
+                    <svg class="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                    <div class="text-lg font-semibold">No results found</div>
+                    <div class="text-sm mt-2">Sorry, we couldn't find any analytics for this query.</div>
+                </div>
+            `;
+        }
+
+        async function resetDatabase() {
+            if (confirm('Are you sure you want to reset the database? This action cannot be undone.')) {
+                try {
+                    const response = await fetch('/api/reset-db', {
+                        method: 'POST'
+                    });
+                    const data = await response.json();
+                    alert(data.message);
+                    updateDashboard();
+                } catch (error) {
+                    alert('Error resetting database: ' + error);
+                }
+            }
+        }
+
+        async function analyzeQuery() {
+            const query = document.getElementById('queryInput').value;
+            const model = document.getElementById('modelSelect').value;
+            const category = document.getElementById('categorySelect').value;
+            const batchSize = parseInt(document.getElementById('batchSelect').value);
+            
+            // Show loading
+            document.getElementById('loading').classList.remove('hidden');
+            
+            try {
+                const results = [];
+                for (let i = 0; i < batchSize; i++) {
+                    document.getElementById('loadingText').textContent = 
+                        `Processing query ${i + 1} of ${batchSize}...`;
+                    
+                    const response = await fetch('/api/analyze', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: query, model, category })
+                    });
+                    
+                    const data = await response.json();
+                    if (data.error) throw new Error(data.error);
+                    results.push(data);
+                }
+                
+                // Process and display results
+                const brandFrequency = {};
+                results.forEach(result => {
+                    result.brands.forEach((brand, index) => {
+                        if (!brandFrequency[brand]) {
+                            brandFrequency[brand] = {
+                                count: 0,
+                                reasons: new Set()
+                            };
+                        }
+                        brandFrequency[brand].count++;
+                        brandFrequency[brand].reasons.add(result.reasoning[index]);
+                    });
+                });
+
+                // Display results
+                if (Object.keys(brandFrequency).length === 0) {
+                    document.getElementById('results').innerHTML = showNoResults();
+                } else {
+                    let html = '<div class="space-y-4">';
+                    Object.entries(brandFrequency)
+                        .sort(([,a], [,b]) => b.count - a.count)
+                        .forEach(([brand, data]) => {
+                            const percentage = (data.count / batchSize * 100).toFixed(1);
+                            html += `
+                                <div class="p-3 bg-green-900 bg-opacity-20 rounded-lg">
+                                    <div class="flex justify-between items-center">
+                                        <span class="font-bold">${brand}</span>
+                                        <span class="text-green-400">${percentage}% (${data.count}/${batchSize})</span>
+                                    </div>
+                                    <div class="text-sm text-gray-400 mt-2">
+                                        Reasons:
+                                        <ul class="list-disc pl-4">
+                                            ${Array.from(data.reasons).map(reason => 
+                                                `<li>${reason}</li>`).join('')}
+                                        </ul>
+                                    </div>
+                                </div>`;
+                        });
+                    html += '</div>';
+                    document.getElementById('results').innerHTML = html;
+                }
+                updateDashboard();
+                
+            } catch (error) {
+                document.getElementById('results').innerHTML = `Error: ${error}`;
+            } finally {
+                // Hide loading
+                document.getElementById('loading').classList.add('hidden');
+            }
+        }
+
+        async function updateDashboard() {
+            const [stats, analytics] = await Promise.all([
+                fetch('/api/stats').then(r => r.json()),
+                fetch('/api/analytics').then(r => r.json())
+            ]);
+            
+            // Update ranking overview
+            const rankingHtml = Object.entries(stats.top_brands)
+                .sort(([,a], [,b]) => a.avg_rank - b.avg_rank)
+                .map(([brand, data], index) => `
+                    <div class="p-4 hover:bg-green-900 hover:bg-opacity-10 rounded-lg transition-colors">
+                        <div class="flex items-baseline gap-3">
+                            <span class="text-2xl font-bold text-gray-500">${(data.avg_rank).toFixed(1)}</span>
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2">
+                                    <img 
+                                        src="https://www.google.com/s2/favicons?domain=${data.url}&sz=32" 
+                                        class="w-6 h-6 rounded-lg"
+                                        onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏢</text></svg>'"
+                                    />
+                                    <a href="${data.url}" 
+                                       target="_blank" 
+                                       class="text-lg font-semibold text-green-400 hover:text-green-300">
+                                        ${brand}
+                                    </a>
+                                </div>
+                                <div class="mt-1 text-sm text-gray-300">
+                                    Appears in position ${data.avg_rank.toFixed(1)} on average
+                                </div>
+                                <div class="mt-2 flex items-center gap-2 text-xs text-gray-400">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                            d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                                    </svg>
+                                    Mentioned in ${data.count} queries
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            
+            document.getElementById('rankingOverview').innerHTML = rankingHtml;
+            
+            // Update stats badges
+            document.getElementById('totalQueries').textContent = Object.values(stats.categories).reduce((a, b) => a + b, 0);
+            document.getElementById('uniqueBrands').textContent = Object.keys(stats.top_brands).length;
+            document.getElementById('avgConfidence').textContent = 
+                (Object.values(analytics.confidence_by_category).reduce((a, b) => a + b, 0) / 
+                Object.values(analytics.confidence_by_category).length || 0).toFixed(1) + '%';
+            
+            // Update charts with enhanced styling
+            const chartOptions = {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#E2E8F0'
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(74, 222, 128, 0.1)'
+                        },
+                        ticks: {
+                            color: '#E2E8F0'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(74, 222, 128, 0.1)'
+                        },
+                        ticks: {
+                            color: '#E2E8F0'
+                        }
+                    }
+                }
+            };
+
+            // Update existing charts with new styling
+            updateCharts(stats, analytics, chartOptions);
+        }
+
+        async function updateCharts(stats, analytics, chartOptions) {
+            if (brandsChart) brandsChart.destroy();
+            
+            // Sort brands by mentions for consistent ordering
+            const sortedBrands = Object.entries(stats.top_brands || {})
+                .sort(([,a], [,b]) => (b?.count || 0) - (a?.count || 0))
+                .slice(0, 10);
+            
+            brandsChart = new Chart(document.getElementById('brandsChart'), {
+                type: 'bar',
+                data: {
+                    labels: sortedBrands.map(([brand]) => brand),
+                    datasets: [
+                        {
+                            label: 'Mentions',
+                            data: sortedBrands.map(([_, data]) => parseInt(data?.count) || 0),
+                            backgroundColor: '#4ade80',
+                            borderRadius: 6,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Average Rank',
+                            data: sortedBrands.map(([_, data]) => parseFloat(data?.avg_rank) || 0),
+                            backgroundColor: '#f472b6',
+                            borderRadius: 6,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    ...chartOptions,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Number of Mentions',
+                                color: '#4ade80'
+                            },
+                            ticks: { color: '#4ade80' },
+                            grid: { color: 'rgba(74, 222, 128, 0.1)' }
+                        },
+                        y1: {
+                            beginAtZero: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Average Rank Position',
+                                color: '#f472b6'
+                            },
+                            ticks: { color: '#f472b6' },
+                            grid: { display: false }
+                        },
+                        x: {
+                            ticks: { color: '#E2E8F0' },
+                            grid: { color: 'rgba(74, 222, 128, 0.1)' }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: { color: '#E2E8F0' }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const brand = context.label;
+                                    const data = stats.top_brands[brand];
+                                    return context.dataset.label === 'Mentions' ?
+                                        `Mentions: ${data.count}` :
+                                        `Average Rank: ${data.avg_rank.toFixed(1)}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Initial load
+        updateDashboard();
+    </script>
+</body>
+</html>
