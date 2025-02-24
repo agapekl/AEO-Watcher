@@ -3,8 +3,7 @@
 
 AEO Watcher is a powerful analytics tool that helps analyze and track brand recommendations made by Large Language Models (LLMs). It provides real-time insights into which brands AI models are suggesting across different categories and queries.
 
-![video](https://cdn.discordapp.com/attachments/1264949726915199037/1342925592437198859/Clipboard-20250222-182614-403.mp4?ex=67be0b6b&is=67bcb9eb&hm=d0ebb1b4dff1aeb54402998a0cba80cda637ffc9402d10df14358373cb5bd255&)
-
+![image](https://github.com/user-attachments/assets/e48a214a-fd50-407a-8a95-5d46157746da)
 
 ## Features
 
